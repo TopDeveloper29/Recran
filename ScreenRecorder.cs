@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -12,6 +13,8 @@ namespace Recran
 {
     public class ScreenRecorder
     {
+        const int ENUM_CURRENT_SETTINGS = -1;
+
         static private Image LastImage;
         AudioRecorder recorder = new AudioRecorder();
         private string appdata = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -30,17 +33,19 @@ namespace Recran
         {
             try
             {
-                Rectangle bounds = Screen.AllScreens[SNUM].Bounds;
-                using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height))
+                Screen screen = Screen.AllScreens[SNUM];
+                DEVMODE dm = new DEVMODE();
+                dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+                EnumDisplaySettings(screen.DeviceName, ENUM_CURRENT_SETTINGS, ref dm);
+
+                using (Bitmap bmp = new Bitmap(dm.dmPelsWidth, dm.dmPelsHeight))
+                using (Graphics g = Graphics.FromImage(bmp))
                 {
-                    using (Graphics graphics = Graphics.FromImage(bitmap))
-                    {
-                        graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bounds.Size);
-                    }
+                    g.CopyFromScreen(dm.dmPositionX, dm.dmPositionY, 0, 0, bmp.Size);
 
                     using (MemoryStream stream = new MemoryStream())
                     {
-                        bitmap.Save(stream, ImageFormat.Png);
+                        bmp.Save(stream, ImageFormat.Png);
                         stream.Seek(0, SeekOrigin.Begin);
                         Image img = Image.FromStream(stream);
                         LastImage = img;
@@ -110,6 +115,48 @@ namespace Recran
                 }
                 
             } catch(Exception ex) { MessageBox.Show(ex.Message, "ERROR", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
+
+        [DllImport("user32.dll")]
+        public static extern bool EnumDisplaySettings(string lpszDeviceName, int iModeNum, ref DEVMODE lpDevMode);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct DEVMODE
+        {
+            private const int CCHDEVICENAME = 0x20;
+            private const int CCHFORMNAME = 0x20;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 0x20)]
+            public string dmDeviceName;
+            public short dmSpecVersion;
+            public short dmDriverVersion;
+            public short dmSize;
+            public short dmDriverExtra;
+            public int dmFields;
+            public int dmPositionX;
+            public int dmPositionY;
+            public ScreenOrientation dmDisplayOrientation;
+            public int dmDisplayFixedOutput;
+            public short dmColor;
+            public short dmDuplex;
+            public short dmYResolution;
+            public short dmTTOption;
+            public short dmCollate;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 0x20)]
+            public string dmFormName;
+            public short dmLogPixels;
+            public int dmBitsPerPel;
+            public int dmPelsWidth;
+            public int dmPelsHeight;
+            public int dmDisplayFlags;
+            public int dmDisplayFrequency;
+            public int dmICMMethod;
+            public int dmICMIntent;
+            public int dmMediaType;
+            public int dmDitherType;
+            public int dmReserved1;
+            public int dmReserved2;
+            public int dmPanningWidth;
+            public int dmPanningHeight;
         }
     }
 }
